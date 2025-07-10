@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"s>
+    <title>フォローアップ予約</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) を読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', 'Inter', sans-serif; }
+        .btn-custom-red { background-color: #E8473F; color: white; }
+        .btn-custom-red:hover { background-color: #d73c35; }
+        .btn-disabled { background-color: #d1d5db; cursor: not-allowed; }
+        .selected { outline: 3px solid #3b82f6; outline-offset: 2px; }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div id="app" class="max-w-lg mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- 予約フォームのカード -->
+        <div class="bg-white p-6 rounded-2xl shadow-md mb-8">
+            <!-- イラスト表示エリア -->
+            <div class="flex justify-center mb-4">
+                <!-- ▼▼▼ このURLを、WordPressにアップロードした画像のURLに書き換えてください ▼▼▼ -->
+                <img src="http://howhowvideo.jp/wp-content/uploads/2025/07/正方形画像の生成-6.png" alt="オンラインフォローアップのイラスト" class="w-24 h-24 object-cover rounded-full shadow" onerror="this.onerror=null;this.src='https://placehold.co/128x128/ffe4e1/e8473f?text=Image';">
+                <!-- ▲▲▲ このURLを、WordPressにアップロードした画像のURLに書き換えてください ▲▲▲ -->
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2 text-center">フォローアップ予約</h1>
+            <p class="text-gray-600 mb-6 text-center">ご希望の日時を選択してください。</p>
+
+            <div id="loading" class="text-center py-8">
+                <svg class="animate-spin h-8 w-8 text-gray-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-2 text-gray-500">予約状況を確認中...</p>
+            </div>
+
+            <div id="reservation-form" class="hidden">
+                <div class="mb-6">
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-2">お名前</label>
+                    <input type="text" id="name" name="name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="山田 太郎">
+                    <p id="name-error" class="text-red-500 text-sm mt-1 hidden">お名前を入力してください。</p>
+                </div>
+                <div class="mb-6">
+                    <label for="date-select" class="block text-sm font-medium text-gray-700 mb-2">予約日</label>
+                    <select id="date-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">時間</label>
+                    <div id="time-slots" class="grid grid-cols-2 gap-3"></div>
+                    <p id="time-error" class="text-red-500 text-sm mt-1 hidden">時間を選択してください。</p>
+                </div>
+                <button id="submit-button" class="w-full btn-custom-red font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">
+                    この内容で予約する
+                </button>
+            </div>
+        </div>
+
+        <!-- あなたの予約リスト -->
+        <div id="user-reservations-section" class="bg-white p-6 rounded-2xl shadow-md hidden">
+             <h2 class="text-xl font-bold text-gray-800 mb-4">あなたの予約</h2>
+             <div id="user-reservations-list" class="space-y-3">
+                <!-- 予約情報がここに表示されます -->
+             </div>
+             <p id="no-reservations-message" class="text-gray-500 text-center py-4">現在、予約はありません。</p>
+        </div>
+    </div>
+
+    <!-- メッセージ表示エリア -->
+    <div id="message-box" class="hidden fixed top-5 right-5 bg-white shadow-lg rounded-lg p-4 max-w-sm z-50">
+        <p id="message-text"></p>
+    </div>
+
+    <!-- 確認モーダル -->
+    <div id="confirmation-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 id="confirmation-title" class="text-lg leading-6 font-medium text-gray-900">予約の確認</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="confirmation-text" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3 gap-2 flex">
+                    <button id="confirm-cancel-button" class="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
+                        キャンセル
+                    </button>
+                    <button id="confirm-ok-button" class="w-full px-4 py-2 btn-custom-red text-white rounded-md">
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+        // ▼【重要】ご自身のFirebaseプロジェクトの設定情報に書き換えてください ▼
+const firebaseConfig = {
+  apiKey: "AIzaSyCCbdtRkslbxtpUs-BgdAn9PzuJ1yeAKmo",
+  authDomain: "reservationapri.firebaseapp.com",
+  projectId: "reservationapri",
+  storageBucket: "reservationapri.firebasestorage.app",
+  messagingSenderId: "942698093530",
+  appId: "1:942698093530:web:ae1e3932319c8a5be53ee3",
+  measurementId: "G-LZGHP1E12S"
+};
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+        // --- アプリ設定 ---
+        const TIME_SLOTS = ["18:00-18:30", "18:30-19:00", "19:00-19:30", "19:30-20:00"];
+
+        // 【NEW】時間帯ごとの定員設定
+        const SLOT_CAPACITIES = {
+            "18:00-18:30": 10,
+            "18:30-19:00": 10,
+            "19:00-19:30": 10,
+            "19:30-20:00": 5
+        };
+
+        // 【NEW】手動で予約不可にする日付を設定 (例: "YYYY-MM-DD")
+        const MANUAL_EXCLUDE_DATES = [
+            // "2025-08-14", // 例: お盆休みなどで開催しない場合
+            // "2025-12-25"  // 例: クリスマスなどで開催しない場合
+        ];
+
+
+        // --- 初期化処理 ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- DOM要素 ---
+        const loadingEl = document.getElementById('loading');
+        const formEl = document.getElementById('reservation-form');
+        const nameInput = document.getElementById('name');
+        const dateSelect = document.getElementById('date-select');
+        const timeSlotsContainer = document.getElementById('time-slots');
+        const submitButton = document.getElementById('submit-button');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmationTitle = document.getElementById('confirmation-title');
+        const confirmationText = document.getElementById('confirmation-text');
+        const confirmOkButton = document.getElementById('confirm-ok-button');
+        const confirmCancelButton = document.getElementById('confirm-cancel-button');
+        const userReservationsSection = document.getElementById('user-reservations-section');
+        const userReservationsList = document.getElementById('user-reservations-list');
+        const noReservationsMessage = document.getElementById('no-reservations-message');
+
+        // --- 状態管理 ---
+        let selectedTimeSlot = null;
+        let allReservations = [];
+        let upcomingThursdays = [];
+        let wpUserId = null; // WordPressのユーザーIDを保持
+
+        /**
+         * 「今月」と「来月」の予約可能な木曜日（それぞれ先着4回）を検索し、日付選択プルダウンを生成する
+         */
+        function setupDateSelect() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // 時間をリセットして日付のみで比較
+
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth(); // 0-11
+
+            const nextMonthDate = new Date(currentYear, currentMonth + 1, 1);
+            const nextMonthYear = nextMonthDate.getFullYear();
+            const nextMonth = nextMonthDate.getMonth();
+
+            // 指定された年月の最初の4回の木曜日を見つけるヘルパー関数
+            const findFirstFourThursdays = (year, month) => {
+                const thursdays = [];
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    if (date.getDay() === 4) { // 4は木曜日
+                        thursdays.push(date);
+                    }
+                }
+                return thursdays.slice(0, 4); // 最初の4つだけを返す（第5木曜は除外）
+            };
+
+            const thursdaysThisMonth = findFirstFourThursdays(currentYear, currentMonth);
+            const thursdaysNextMonth = findFirstFourThursdays(nextMonthYear, nextMonth);
+
+            const allPossibleThursdays = [...thursdaysThisMonth, ...thursdaysNextMonth];
+
+            // 過去の日付と手動除外日を除外し、YYYY-MM-DD形式の文字列に変換
+            upcomingThursdays = allPossibleThursdays
+                .filter(date => date >= today)
+                .map(date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`)
+                .filter(dateString => !MANUAL_EXCLUDE_DATES.includes(dateString));
+
+            if (upcomingThursdays.length === 0) {
+                 dateSelect.innerHTML = '<option>予約可能な日程がありません</option>';
+                 dateSelect.disabled = true;
+                 submitButton.disabled = true;
+                 return;
+            }
+
+            dateSelect.innerHTML = upcomingThursdays.map(dateStr => {
+                const d = new Date(dateStr);
+                const formattedDate = `${d.getMonth() + 1}月${d.getDate()}日 (木)`;
+                return `<option value="${dateStr}">${formattedDate}</option>`;
+            }).join('');
+        }
+
+
+        /**
+         * Firestoreの予約データの変更をリッスン（監視）する
+         */
+        function listenForReservations() {
+            if (upcomingThursdays.length === 0) {
+                loadingEl.style.display = 'none';
+                formEl.style.display = 'block';
+                updateTimeSlots();
+                displayUserReservations();
+                return;
+            }
+
+            const q = query(collection(db, "reservations"), where("date", "in", upcomingThursdays));
+            onSnapshot(q, (querySnapshot) => {
+                allReservations = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                loadingEl.style.display = 'none';
+                formEl.style.display = 'block';
+                updateTimeSlots();
+                displayUserReservations();
+            }, (error) => {
+                console.error("予約データの取得に失敗しました:", error);
+                showMessage("エラー: 予約データを取得できませんでした。", "error");
+                loadingEl.style.display = 'none';
+            });
+        }
+
+        /**
+         * ログイン中のユーザーの予約一覧を表示する
+         */
+        function displayUserReservations() {
+            if (!wpUserId) {
+                userReservationsSection.style.display = 'none';
+                return;
+            }
+
+            const myReservations = allReservations.filter(r => r.wpUserId === wpUserId);
+            userReservationsSection.style.display = 'block';
+            userReservationsList.innerHTML = '';
+
+            if (myReservations.length === 0) {
+                noReservationsMessage.style.display = 'block';
+            } else {
+                noReservationsMessage.style.display = 'none';
+                myReservations.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+                myReservations.forEach(res => {
+                    const d = new Date(res.date);
+                    const formattedDate = `${d.getMonth() + 1}月${d.getDate()}日 (木)`;
+                    const item = document.createElement('div');
+                    item.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
+                    item.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${formattedDate}</p>
+                            <p class="text-sm text-gray-600">${res.timeSlot}</p>
+                        </div>
+                        <button data-id="${res.id}" class="cancel-button text-sm text-red-600 hover:text-red-800 font-medium">キャンセル</button>
+                    `;
+                    userReservationsList.appendChild(item);
+                });
+
+                document.querySelectorAll('.cancel-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const reservationId = e.target.dataset.id;
+                        handleCancelReservation(reservationId);
+                    });
+                });
+            }
+        }
+
+        /**
+         * 選択された日付に基づいて時間スロットの表示を更新する
+         */
+        function updateTimeSlots() {
+            const selectedDate = dateSelect.value;
+            timeSlotsContainer.innerHTML = '';
+            selectedTimeSlot = null;
+
+            if(!selectedDate || dateSelect.disabled) {
+                return;
+            }
+
+            const reservationsForDate = allReservations.filter(r => r.date === selectedDate);
+
+            TIME_SLOTS.forEach(slot => {
+                const reservationsForSlot = reservationsForDate.filter(r => r.timeSlot === slot);
+                const capacity = SLOT_CAPACITIES[slot] || 1; // 【MODIFIED】定員を取得
+                const isFull = reservationsForSlot.length >= capacity;
+                const remaining = capacity - reservationsForSlot.length;
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.slot = slot;
+                button.className = `p-3 rounded-lg text-center transition-all duration-200 border ${isFull ? 'btn-disabled' : 'bg-white hover:bg-gray-100'}`;
+                button.disabled = isFull;
+                button.innerHTML = `<p class="font-semibold">${slot}</p><p class="text-sm">${isFull ? '満席' : `残り ${remaining}席`}</p>`;
+
+                if (!isFull) {
+                    button.addEventListener('click', () => {
+                        document.querySelectorAll('#time-slots button').forEach(btn => btn.classList.remove('selected'));
+                        button.classList.add('selected');
+                        selectedTimeSlot = slot;
+                    });
+                }
+                timeSlotsContainer.appendChild(button);
+            });
+        }
+
+        function validateForm() {
+            let isValid = true;
+            if (nameInput.value.trim() === '') {
+                document.getElementById('name-error').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('name-error').classList.add('hidden');
+            }
+            if (!selectedTimeSlot) {
+                document.getElementById('time-error').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('time-error').classList.add('hidden');
+            }
+            return isValid;
+        }
+
+        async function showConfirmation(title, text, okLabel = "OK") {
+            confirmationTitle.innerText = title;
+            confirmationText.innerText = text;
+            confirmOkButton.innerText = okLabel;
+            confirmationModal.style.display = 'block';
+
+            return new Promise(resolve => {
+                confirmOkButton.onclick = () => {
+                    confirmationModal.style.display = 'none';
+                    resolve(true);
+                };
+                confirmCancelButton.onclick = () => {
+                    confirmationModal.style.display = 'none';
+                    resolve(false);
+                };
+            });
+        }
+
+        async function handleReservation() {
+            if (!validateForm()) return;
+
+            const name = nameInput.value.trim();
+            const date = dateSelect.value;
+
+            const existingBooking = allReservations.find(r => r.date === date && ( (wpUserId && r.wpUserId === wpUserId) || r.name === name));
+            if (existingBooking) {
+                 showMessage(`この日は既に予約済みです。`, "error");
+                 return;
+            }
+
+            const confirmed = await showConfirmation(
+                '予約の確認',
+                `${new Date(date).getMonth()+1}月${new Date(date).getDate()}日 ${selectedTimeSlot} で予約します。よろしいですか？`,
+                '予約する'
+            );
+
+            if (!confirmed) return;
+
+            submitButton.disabled = true;
+            submitButton.textContent = '予約処理中...';
+
+            try {
+                await addDoc(collection(db, "reservations"), {
+                    name: name,
+                    date: date,
+                    timeSlot: selectedTimeSlot,
+                    wpUserId: wpUserId || null,
+                    createdAt: new Date()
+                });
+                showMessage("予約が完了しました！", "success");
+                nameInput.value = wpUserId ? nameInput.value : '';
+                selectedTimeSlot = null;
+            } catch (error) {
+                console.error("予約の追加に失敗しました:", error);
+                showMessage("エラー: 予約に失敗しました。もう一度お試しください。", "error");
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'この内容で予約する';
+            }
+        }
+
+        async function handleCancelReservation(reservationId) {
+            const reservationToCancel = allReservations.find(r => r.id === reservationId);
+            if (!reservationToCancel) return;
+
+            const d = new Date(reservationToCancel.date);
+            const formattedDate = `${d.getMonth() + 1}月${d.getDate()}日`;
+
+            const confirmed = await showConfirmation(
+                '予約のキャンセル',
+                `${formattedDate} ${reservationToCancel.timeSlot} の予約をキャンセルします。よろしいですか？`,
+                'キャンセルする'
+            );
+
+            if (!confirmed) return;
+
+            try {
+                await deleteDoc(doc(db, "reservations", reservationId));
+                showMessage("予約をキャンセルしました。", "success");
+            } catch (error) {
+                console.error("予約のキャンセルに失敗しました:", error);
+                showMessage("エラー: キャンセルに失敗しました。もう一度お試しください。", "error");
+            }
+        }
+
+        function showMessage(text, type = 'success') {
+            messageText.textContent = text;
+            messageBox.className = `fixed top-5 right-5 shadow-lg rounded-lg p-4 max-w-sm z-50 transition-opacity duration-300 ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+            messageBox.style.display = 'block';
+            setTimeout(() => { messageBox.style.display = 'none'; }, 4000);
+        }
+
+        function setUserInfoFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const userName = urlParams.get('wp_user_name');
+            wpUserId = urlParams.get('wp_user_id');
+            if (userName) {
+                nameInput.value = decodeURIComponent(userName);
+                nameInput.readOnly = true;
+                nameInput.classList.add('bg-gray-100');
+            }
+        }
+
+        async function setupReservationApp() {
+            setUserInfoFromUrl();
+            setupDateSelect();
+            listenForReservations();
+
+            dateSelect.addEventListener('change', updateTimeSlots);
+            submitButton.addEventListener('click', handleReservation);
+        }
+
+        setupReservationApp();
+
+    </script>
+</body>
+</html>
