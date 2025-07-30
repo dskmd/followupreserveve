@@ -159,8 +159,11 @@
                     reservations.forEach(res => {
                         const tr = document.createElement('tr');
                         
-                        const formattedDate = new Date(res.date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
-                        const formattedCreatedAt = res.createdAt.toDate().toLocaleString('ja-JP');
+                        // 日付のフォーマット
+                        const formattedDate = res.date ? new Date(res.date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+                        
+                        // 【修正点】createdAtが存在する場合のみフォーマットし、存在しない場合は 'N/A' を表示
+                        const formattedCreatedAt = res.createdAt ? res.createdAt.toDate().toLocaleString('ja-JP') : 'N/A';
 
                         tr.innerHTML = `
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${formattedDate}</td>
