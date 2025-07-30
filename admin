@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>予約管理ダッシュボード</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) を読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', 'Inter', sans-serif; }
+        th { text-align: left; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- パスワード入力画面 -->
+    <div id="password-screen" class="min-h-screen flex items-center justify-center">
+        <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
+            <h1 class="text-2xl font-bold text-gray-800 mb-4 text-center">管理者ログイン</h1>
+            <p class="text-gray-600 mb-6 text-center">閲覧用のパスワードを入力してください。</p>
+            <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4" placeholder="パスワード">
+            <button id="login-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                表示する
+            </button>
+            <p id="password-error" class="text-red-500 text-sm mt-2 text-center hidden">パスワードが違います。</p>
+        </div>
+    </div>
+
+    <!-- 予約データ表示画面 -->
+    <div id="dashboard-screen" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">予約管理ダッシュボード</h1>
+            <button id="logout-button" class="text-sm text-gray-600 hover:underline">ログアウト</button>
+        </div>
+        
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+            <div id="loading" class="text-center py-12">
+                <p class="text-gray-500">データを読み込んでいます...</p>
+            </div>
+            <div id="data-table-container" class="hidden">
+                 <p class="mb-4 text-gray-600">現在 <strong id="reservation-count" class="text-blue-600">0</strong> 件の予約があります。（リアルタイム更新）</p>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">予約日</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">時間</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">お名前</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">予約日時</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">WordPress ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reservations-tbody" class="bg-white divide-y divide-gray-200">
+                            <!-- データはここに挿入されます -->
+                        </tbody>
+                    </table>
+                </div>
+                 <p id="no-data" class="text-center py-12 text-gray-500 hidden">現在、予約はありません。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, query, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- 設定項目 ---
+        // ▼▼▼ このパスワードを、スタッフだけが知っている秘密の言葉に変更してください ▼▼▼
+        const ADMIN_PASSWORD = "howhowkids"; 
+        
+        // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+        // ▼【重要】ご自身のFirebaseプロジェクトの設定情報に書き換えてください ▼
+        const firebaseConfig = {
+            apiKey: "AIzaSyCCbdtRkslbxtpUs-BgdAn9PzuJ1yeAKmo",
+            authDomain: "reservationapri.firebaseapp.com",
+            projectId: "reservationapri",
+            storageBucket: "reservationapri.firebasestorage.app",
+            messagingSenderId: "942698093530",
+            appId: "1:942698093530:web:ae1e3932319c8a5be53ee3"
+        };
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+        // --- 初期化 ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- DOM要素 ---
+        const passwordScreen = document.getElementById('password-screen');
+        const dashboardScreen = document.getElementById('dashboard-screen');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-button');
+        const logoutButton = document.getElementById('logout-button');
+        const passwordError = document.getElementById('password-error');
+        const loadingEl = document.getElementById('loading');
+        const dataTableContainer = document.getElementById('data-table-container');
+        const reservationsTbody = document.getElementById('reservations-tbody');
+        const reservationCount = document.getElementById('reservation-count');
+        const noDataEl = document.getElementById('no-data');
+
+        let unsubscribe = null; // リアルタイムリスナーを停止するための変数
+
+        // --- 関数定義 ---
+
+        // ログイン処理
+        function handleLogin() {
+            if (passwordInput.value === ADMIN_PASSWORD) {
+                sessionStorage.setItem('isAdminAuthenticated', 'true');
+                showDashboard();
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        }
+
+        // ログアウト処理
+        function handleLogout() {
+            sessionStorage.removeItem('isAdminAuthenticated');
+            if (unsubscribe) {
+                unsubscribe(); // リアルタイムリスナーを停止
+            }
+            showPasswordScreen();
+        }
+
+        // ダッシュボード表示
+        function showDashboard() {
+            passwordScreen.classList.add('hidden');
+            dashboardScreen.classList.remove('hidden');
+            listenForReservations();
+        }
+
+        // パスワード画面表示
+        function showPasswordScreen() {
+            dashboardScreen.classList.add('hidden');
+            passwordScreen.classList.remove('hidden');
+            passwordInput.value = '';
+            passwordError.classList.add('hidden');
+        }
+
+        // Firestoreの予約データをリアルタイムで監視する
+        function listenForReservations() {
+            const q = query(collection(db, "reservations"), orderBy("date", "desc"));
+            
+            unsubscribe = onSnapshot(q, (querySnapshot) => {
+                loadingEl.classList.add('hidden');
+                dataTableContainer.classList.remove('hidden');
+                reservationsTbody.innerHTML = ''; // テーブルをクリア
+                
+                const reservations = querySnapshot.docs.map(doc => doc.data());
+                reservationCount.textContent = reservations.length;
+
+                if (reservations.length === 0) {
+                    noDataEl.classList.remove('hidden');
+                } else {
+                    noDataEl.classList.add('hidden');
+                    reservations.forEach(res => {
+                        const tr = document.createElement('tr');
+                        
+                        const formattedDate = new Date(res.date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+                        const formattedCreatedAt = res.createdAt.toDate().toLocaleString('ja-JP');
+
+                        tr.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${formattedDate}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${res.timeSlot || ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${res.name || ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formattedCreatedAt}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.wpUserId || 'N/A'}</td>
+                        `;
+                        reservationsTbody.appendChild(tr);
+                    });
+                }
+            }, (error) => {
+                console.error("データの取得に失敗しました:", error);
+                loadingEl.textContent = "エラー: データを取得できませんでした。";
+            });
+        }
+
+        // --- イベントリスナー ---
+        loginButton.addEventListener('click', handleLogin);
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+        logoutButton.addEventListener('click', handleLogout);
+
+        // --- 初期表示処理 ---
+        // ページ読み込み時に、すでに認証済みかチェック
+        if (sessionStorage.getItem('isAdminAuthenticated') === 'true') {
+            showDashboard();
+        }
+
+    </script>
+</body>
+</html>
